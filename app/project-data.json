@@ -1,0 +1,36 @@
+{
+  "projects": [
+    {
+      "name": "Contributor Onboarding",
+      "owner": "Mona Patel",
+      "status": "Active",
+      "recentActivity": "Published the updated welcome guide and requested team feedback.",
+      "priority": "High",
+      "summary": "Make it easier for new contributors to find their first meaningful task."
+    },
+    {
+      "name": "Community Events",
+      "owner": "Jordan Lee",
+      "status": "On Track",
+      "recentActivity": "Confirmed speakers for the November community showcase.",
+      "priority": "Medium",
+      "summary": "Bring contributors together through welcoming, practical events."
+    },
+    {
+      "name": "Documentation Refresh",
+      "owner": "Alex Rivera",
+      "status": "At Risk",
+      "recentActivity": "The review is waiting on two outstanding technical approvals.",
+      "priority": "High",
+      "summary": "Keep core project guidance accurate, approachable, and easy to navigate."
+    },
+    {
+      "name": "Design System",
+      "owner": "Sam Chen",
+      "status": "Planning",
+      "recentActivity": "Collected component requests from product and engineering.",
+      "priority": "Low",
+      "summary": "Create shared interface patterns that help teams ship consistent experiences."
+    }
+  ]
+}

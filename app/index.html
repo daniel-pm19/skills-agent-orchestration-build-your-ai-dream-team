@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="A clear, current view of project ownership, status, activity, and priority.">
+    <title>Project Pulse</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">TEAM PROJECTS</header>
+
+      <main class="dashboard">
+        <header class="dashboard-header">
+          <p class="eyebrow">A shared view of the work</p>
+          <h1 class="dashboard-title">Project Pulse</h1>
+          <p class="dashboard-description">
+            See what’s moving, who’s leading, and where the team’s attention is needed.
+          </p>
+        </header>
+
+        <section class="dashboard-summary" aria-label="Project overview">
+          <article class="summary-card">
+            <p class="meta-label">Projects</p>
+            <p class="meta-value" id="total-projects">—</p>
+          </article>
+          <article class="summary-card">
+            <p class="meta-label">Active</p>
+            <p class="meta-value" id="active-projects">—</p>
+          </article>
+          <article class="summary-card">
+            <p class="meta-label">At risk</p>
+            <p class="meta-value" id="at-risk-projects">—</p>
+          </article>
+        </section>
+
+        <section aria-label="Projects">
+          <div id="dashboard-state" aria-live="polite" aria-atomic="true">
+            <p class="loading-state" role="status">Loading project updates…</p>
+          </div>
+          <div class="project-grid" id="project-grid" role="list" aria-label="Project cards"></div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      (() => {
+        "use strict";
+
+        const dataUrl = new URL("project-data.json", document.baseURI);
+        const grid = document.getElementById("project-grid");
+        const stateRegion = document.getElementById("dashboard-state");
+        const dashboard = document.querySelector(".dashboard");
+
+        function element(tagName, className, text) {
+          const node = document.createElement(tagName);
+          if (className) node.className = className;
+          if (text !== undefined) node.textContent = text;
+          return node;
+        }
+
+        function showState(className, message, isError) {
+          stateRegion.replaceChildren(element("p", className, message));
+          if (isError) {
+            stateRegion.firstElementChild.setAttribute("role", "alert");
+          } else {
+            stateRegion.firstElementChild.setAttribute("role", "status");
+          }
+        }
+
+        function cleanValue(value) {
+          return typeof value === "string" ? value.trim() : "";
+        }
+
+        function normalizedVariant(value) {
+          return value.toLowerCase().replace(/\s+/g, "-");
+        }
+
+        function addMetaItem(parent, label, value, badgeClass) {
+          const item = document.createElement("div");
+          const labelNode = element("span", "meta-label", label);
+          const valueNode = element("span", `meta-value${badgeClass ? ` ${badgeClass}` : ""}`, value);
+          item.append(labelNode, valueNode);
+          parent.append(item);
+        }
+
+        function createProjectCard(project) {
+          const card = element("article", "project-card");
+          card.setAttribute("role", "listitem");
+
+          const header = element("header", "project-card-header");
+          const identity = document.createElement("div");
+          identity.append(
+            element("h2", "project-name", project.name),
+            element("p", "project-owner", `Owned by ${project.owner}`)
+          );
+
+          const statusVariant = normalizedVariant(project.status);
+          const knownStatuses = ["active", "planning", "on-track", "at-risk"];
+          const statusClass = knownStatuses.includes(statusVariant)
+            ? `status-badge--${statusVariant}`
+            : "";
+          const status = element("span", `status-badge${statusClass ? ` ${statusClass}` : ""}`, project.status);
+          status.setAttribute("aria-label", `Status: ${project.status}`);
+          header.append(identity, status);
+
+          const summary = element("p", "project-summary", project.summary || "No summary provided.");
+          const meta = element("div", "project-meta");
+          const priorityVariant = normalizedVariant(project.priority);
+          const knownPriorities = ["high", "medium", "low"];
+          const priorityClass = knownPriorities.includes(priorityVariant)
+            ? `priority-badge--${priorityVariant}`
+            : "";
+          addMetaItem(meta, "Priority", project.priority, `priority-badge${priorityClass ? ` ${priorityClass}` : ""}`);
+
+          const activity = element("p", "activity-row");
+          const activityDot = element("span", "activity-dot");
+          activityDot.setAttribute("aria-hidden", "true");
+          const activityContent = document.createElement("span");
+          activityContent.append(
+            element("span", "meta-label", "Recent activity"),
+            element("span", "meta-value", project.recentActivity)
+          );
+          activity.append(activityDot, activityContent);
+
+          card.append(header, summary, meta, activity);
+          return card;
+        }
+
+        function updateSummary(projects) {
+          const activeCount = projects.filter((project) =>
+            normalizedVariant(project.status) === "active"
+          ).length;
+          const atRiskCount = projects.filter((project) =>
+            normalizedVariant(project.status) === "at-risk"
+          ).length;
+          document.getElementById("total-projects").textContent = String(projects.length);
+          document.getElementById("active-projects").textContent = String(activeCount);
+          document.getElementById("at-risk-projects").textContent = String(atRiskCount);
+        }
+
+        function isCompleteProject(record) {
+          return record !== null &&
+            typeof record === "object" &&
+            !Array.isArray(record) &&
+            ["name", "owner", "status", "recentActivity", "priority"]
+              .every((field) => cleanValue(record[field]).length > 0);
+        }
+
+        async function loadProjects() {
+          dashboard.setAttribute("aria-busy", "true");
+          try {
+            const response = await fetch(dataUrl, { headers: { Accept: "application/json" } });
+            if (!response.ok) {
+              throw new Error(`The project data request failed (${response.status}).`);
+            }
+
+            let payload;
+            try {
+              payload = await response.json();
+            } catch {
+              throw new Error("The project data file is not valid JSON.");
+            }
+            if (!payload || typeof payload !== "object" || !Array.isArray(payload.projects)) {
+              throw new Error("The project data must contain a top-level projects array.");
+            }
+
+            if (payload.projects.length === 0) {
+              grid.replaceChildren();
+              updateSummary([]);
+              showState("empty-state", "No projects yet. Add a project to project-data.json to get started.", false);
+              return;
+            }
+
+            const projects = payload.projects.filter(isCompleteProject).map((project) => ({
+              name: cleanValue(project.name),
+              owner: cleanValue(project.owner),
+              status: cleanValue(project.status),
+              recentActivity: cleanValue(project.recentActivity),
+              priority: cleanValue(project.priority),
+              summary: cleanValue(project.summary)
+            }));
+            const skippedCount = payload.projects.length - projects.length;
+
+            grid.replaceChildren(...projects.map(createProjectCard));
+            updateSummary(projects);
+
+            if (skippedCount > 0) {
+              showState(
+                "error-state",
+                `${skippedCount} incomplete ${skippedCount === 1 ? "project was" : "projects were"} skipped. Each project needs a name, owner, status, recent activity, and priority.`,
+                true
+              );
+            } else {
+              stateRegion.replaceChildren();
+            }
+
+            if (projects.length === 0) {
+              showState(
+                "error-state",
+                "No project cards could be displayed because every record is incomplete. Check that each project has a name, owner, status, recent activity, and priority.",
+                true
+              );
+            }
+          } catch (error) {
+            grid.replaceChildren();
+            updateSummary([]);
+            const message = error instanceof TypeError
+              ? "Project data could not be loaded. Open this dashboard through the local web server and check that project-data.json is available."
+              : error.message || "An unexpected problem prevented the project data from loading.";
+            showState("error-state", message, true);
+          } finally {
+            dashboard.setAttribute("aria-busy", "false");
+          }
+        }
+
+        loadProjects();
+      })();
+    </script>
+  </body>
+</html>
